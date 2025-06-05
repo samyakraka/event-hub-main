@@ -14,6 +14,7 @@ import { format } from "date-fns"
 import { EventDetailsPage } from "../events/EventDetailsPage"
 import { EditEventDialog } from "./EditEventDialog"
 import { toast } from "@/components/ui/use-toast"
+import { EventRecommendations } from '@/components/ai/EventRecommendations'
 
 export function OrganizerDashboard() {
   const { user, logout } = useAuth()
@@ -35,7 +36,6 @@ export function OrganizerDashboard() {
     if (!user) return
 
     try {
-      // Use a simpler query that doesn't require a composite index
       const q = query(collection(db, "events"), where("organizerUid", "==", user.uid))
       const querySnapshot = await getDocs(q)
       const eventsData = querySnapshot.docs.map((doc) => ({
@@ -45,7 +45,6 @@ export function OrganizerDashboard() {
         createdAt: doc.data().createdAt.toDate(),
       })) as Event[]
 
-      // Sort in memory instead of using Firestore orderBy
       eventsData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       setEvents(eventsData)
     } catch (error) {
@@ -59,7 +58,6 @@ export function OrganizerDashboard() {
     if (!user) return
 
     try {
-      // Get all events for this organizer
       const eventsQuery = query(collection(db, "events"), where("organizerUid", "==", user.uid))
       const eventsSnapshot = await getDocs(eventsQuery)
       const eventIds = eventsSnapshot.docs.map((doc) => doc.id)
@@ -70,7 +68,6 @@ export function OrganizerDashboard() {
         return
       }
 
-      // Get all tickets for these events
       let revenue = 0
       let ticketCount = 0
 
@@ -98,17 +95,11 @@ export function OrganizerDashboard() {
     }
 
     try {
-      // Delete the event
       await deleteDoc(doc(db, "events", eventId))
-
-      // Note: In a production app, you might want to also delete related tickets, donations, etc.
-      // For now, we'll just delete the event document
-
       toast({
         title: "Event Deleted",
         description: `"${eventTitle}" has been deleted successfully.`,
       })
-
       fetchEvents()
       fetchRevenueData()
     } catch (error: any) {
@@ -135,7 +126,7 @@ export function OrganizerDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p>Loading your dashboard...</p>
@@ -149,21 +140,23 @@ export function OrganizerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">EventHub</h1>
-              <p className="text-gray-600">Welcome back, {user?.displayName}</p>
+              <h1 className="text-3xl font-semibold text-gray-800">Welcome back, {user?.displayName} 👋</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <Button onClick={() => setShowCreateEvent(true)}>
+              <Button onClick={() => setShowCreateEvent(true)} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Event
               </Button>
-              <Button variant="outline" onClick={logout}>
+              <Button 
+                onClick={logout} 
+                className="bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200 rounded-md px-4 py-2 font-medium transition"
+              >
                 Sign Out
               </Button>
             </div>
@@ -173,139 +166,124 @@ export function OrganizerDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Calendar className="w-8 h-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Events</p>
-                  <p className="text-2xl font-bold text-gray-900">{events.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white shadow-sm rounded-xl p-5 flex flex-col gap-2">
+            <Calendar className="text-blue-500 w-6 h-6" />
+            <p className="text-sm text-gray-500">Total Events</p>
+            <h2 className="text-2xl font-bold text-gray-800">{events.length}</h2>
+          </div>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Users className="w-8 h-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Active Events</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {events.filter((e) => e.status === "upcoming" || e.status === "live").length}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white shadow-sm rounded-xl p-5 flex flex-col gap-2">
+            <Users className="text-green-500 w-6 h-6" />
+            <p className="text-sm text-gray-500">Active Events</p>
+            <h2 className="text-2xl font-bold text-gray-800">
+              {events.filter((e) => e.status === "upcoming" || e.status === "live").length}
+            </h2>
+          </div>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <DollarSign className="w-8 h-8 text-yellow-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">${totalRevenue.toFixed(2)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white shadow-sm rounded-xl p-5 flex flex-col gap-2">
+            <DollarSign className="text-yellow-500 w-6 h-6" />
+            <p className="text-sm text-gray-500">Total Revenue</p>
+            <h2 className="text-2xl font-bold text-gray-800">${totalRevenue.toFixed(2)}</h2>
+          </div>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <BarChart3 className="w-8 h-8 text-purple-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Attendees</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalTickets}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white shadow-sm rounded-xl p-5 flex flex-col gap-2">
+            <BarChart3 className="text-purple-500 w-6 h-6" />
+            <p className="text-sm text-gray-500">Total Attendees</p>
+            <h2 className="text-2xl font-bold text-gray-800">{totalTickets}</h2>
+          </div>
+        </div>
+
+        {/* AI Recommendations */}
+        <div className="mt-8">
+          <EventRecommendations events={events} />
         </div>
 
         {/* Events List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Events</CardTitle>
-            <CardDescription>Manage and monitor your events</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {events.length === 0 ? (
-              <div className="text-center py-12">
-                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No events yet</h3>
-                <p className="text-gray-600 mb-4">Get started by creating your first event</p>
-                <Button onClick={() => setShowCreateEvent(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Event
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {events.map((event) => (
-                  <div key={event.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-lg font-semibold">{event.title}</h3>
-                          <Badge className={getStatusColor(event.status)}>{event.status}</Badge>
-                          <Badge variant="outline">{event.type}</Badge>
-                        </div>
-                        <p className="text-gray-600 mb-2">{event.description}</p>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                          <span>{format(event.date, "MMM dd, yyyy")}</span>
-                          <span>{event.time}</span>
-                          <span>{event.isVirtual ? "Virtual" : event.location}</span>
-                          <span>${event.ticketPrice === 0 ? "Free" : event.ticketPrice}</span>
-                        </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => setSelectedEventId(event.id)}>
-                          Manage
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedEvent(event)
-                            setShowEditEvent(true)
-                          }}
-                        >
-                          Edit
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => deleteEvent(event.id, event.title)}>
-                          Delete
-                        </Button>
-                      </div>
+        <div className="bg-slate-100 border border-slate-200 rounded-xl p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">Your Events</h2>
+              <p className="text-sm text-gray-500">Manage and monitor your events</p>
+            </div>
+          </div>
+
+          {events.length === 0 ? (
+            <div className="text-center py-12 bg-white shadow rounded-lg">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-800 mb-2">No events yet</h3>
+              <p className="text-gray-500 mb-4">Get started by creating your first event</p>
+              <Button onClick={() => setShowCreateEvent(true)} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Your First Event
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div key={event.id} className="bg-white shadow rounded-lg p-4 flex justify-between items-center">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h3 className="text-lg font-medium text-gray-800">{event.title}</h3>
+                      <span className={`${getStatusColor(event.status)} text-xs font-semibold px-2.5 py-0.5 rounded`}>
+                        {event.status}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-2">{event.description}</p>
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <span>{format(event.date, "MMM d, yyyy")}</span>
+                      <span>•</span>
+                      <span>{event.location}</span>
+                      <span>•</span>
+                      <span>{event.ticketPrice ? `$${event.ticketPrice}` : "Free"}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      onClick={() => {
+                        setSelectedEvent(event)
+                        setShowEditEvent(true)
+                      }}
+                      className="bg-sky-100 text-sky-800 font-medium px-4 py-2 rounded-md hover:bg-sky-200 transition"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      onClick={() => deleteEvent(event.id, event.title)}
+                      className="bg-red-100 text-red-800 font-medium px-4 py-2 rounded-md hover:bg-red-200 transition"
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      <CreateEventDialog
-        open={showCreateEvent}
-        onOpenChange={setShowCreateEvent}
-        onEventCreated={() => {
-          fetchEvents()
-          fetchRevenueData()
-        }}
-      />
-      <EditEventDialog
-        event={selectedEvent}
-        open={showEditEvent}
-        onOpenChange={setShowEditEvent}
-        onEventUpdated={() => {
-          fetchEvents()
-          fetchRevenueData()
-          setSelectedEvent(null)
-        }}
-      />
+      {showCreateEvent && (
+        <CreateEventDialog
+          open={showCreateEvent}
+          onOpenChange={setShowCreateEvent}
+          onEventCreated={() => {
+            setShowCreateEvent(false)
+            fetchEvents()
+          }}
+        />
+      )}
+
+      {showEditEvent && selectedEvent && (
+        <EditEventDialog
+          open={showEditEvent}
+          onOpenChange={setShowEditEvent}
+          event={selectedEvent}
+          onEventUpdated={() => {
+            setShowEditEvent(false)
+            fetchEvents()
+          }}
+        />
+      )}
     </div>
   )
 }
