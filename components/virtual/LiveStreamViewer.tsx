@@ -2,16 +2,17 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
-import { collection, addDoc, query, where, onSnapshot } from "firebase/firestore"
+import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Event, LiveChat } from "@/types"
-import { Send, Users, Video } from "lucide-react"
+import { Send, Users, Video, Smile, Trash2, Shield } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { format } from "date-fns"
 
@@ -20,11 +21,22 @@ interface LiveStreamViewerProps {
   hasAccess: boolean
 }
 
+const EMOJI_LIST = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏", "🎉"]
+
 export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
   const { user } = useAuth()
   const [chatMessages, setChatMessages] = useState<LiveChat[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [isOrganizer, setIsOrganizer] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (user && event.organizerUid === user.uid) {
+      setIsOrganizer(true)
+    }
+  }, [user, event.organizerUid])
 
   useEffect(() => {
     if (!hasAccess || !event.id) return
@@ -54,6 +66,11 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
   }, [event.id, hasAccess])
 
   useEffect(() => {
+    // Auto-scroll to bottom when new messages arrive
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [chatMessages])
+
+  useEffect(() => {
     // Simulate streaming status based on event status
     setIsStreaming(event.status === "live")
   }, [event.status])
@@ -68,6 +85,7 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
         userName: user.displayName || "Anonymous",
         message: newMessage.trim(),
         timestamp: new Date(),
+        reactions: {},
       })
       setNewMessage("")
     } catch (error) {
@@ -75,6 +93,53 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
       toast({
         title: "Error",
         description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const addReaction = async (messageId: string, emoji: string) => {
+    if (!user) return
+
+    try {
+      const message = chatMessages.find((m) => m.id === messageId)
+      if (!message) return
+
+      const reactions = message.reactions || {}
+      const emojiReactions = reactions[emoji] || []
+
+      // Toggle reaction
+      const userIndex = emojiReactions.indexOf(user.uid)
+      if (userIndex > -1) {
+        emojiReactions.splice(userIndex, 1)
+      } else {
+        emojiReactions.push(user.uid)
+      }
+
+      reactions[emoji] = emojiReactions
+
+      await updateDoc(doc(db, "liveChats", messageId), {
+        reactions: reactions,
+      })
+    } catch (error) {
+      console.error("Error adding reaction:", error)
+    }
+  }
+
+  const deleteMessage = async (messageId: string) => {
+    if (!isOrganizer) return
+
+    try {
+      await deleteDoc(doc(db, "liveChats", messageId))
+      toast({
+        title: "Message Deleted",
+        description: "Message has been removed from the chat.",
+      })
+    } catch (error) {
+      console.error("Error deleting message:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete message.",
         variant: "destructive",
       })
     }
@@ -118,12 +183,25 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
           <CardContent>
             <div className="aspect-video bg-black rounded-lg flex items-center justify-center">
               {event.virtualLink && event.status === "live" ? (
-                <iframe
-                  src={event.virtualLink}
-                  className="w-full h-full rounded-lg"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                event.virtualType === "meeting" ? (
+                  <div className="text-white text-center">
+                    <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p className="mb-4">Join the meeting using the link below:</p>
+                    <Button
+                      onClick={() => window.open(event.virtualLink, "_blank")}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      Join Meeting
+                    </Button>
+                  </div>
+                ) : (
+                  <iframe
+                    src={event.virtualLink}
+                    className="w-full h-full rounded-lg"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                )
               ) : (
                 <div className="text-white text-center">
                   <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -142,25 +220,103 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
         </Card>
       </div>
 
-      {/* Live Chat */}
+      {/* Enhanced Live Chat */}
       <div className="lg:col-span-1">
         <Card className="h-[600px] flex flex-col">
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <Users className="w-5 h-5 mr-2" />
-              {event.status === "live" ? "Live Chat" : "Event Chat"} ({chatMessages.length})
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Users className="w-5 h-5 mr-2" />
+                Live Chat ({chatMessages.length})
+              </div>
+              {isOrganizer && (
+                <Badge variant="secondary" className="text-xs">
+                  <Shield className="w-3 h-3 mr-1" />
+                  Moderator
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col p-0">
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-3">
                 {chatMessages.map((message) => (
-                  <div key={message.id} className="text-sm">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-medium text-blue-600">{message.userName}</span>
-                      <span className="text-xs text-gray-500">{message.timestamp.toLocaleTimeString()}</span>
+                  <div key={message.id} className="text-sm group">
+                    <div className="flex items-start justify-between mb-1">
+                      <div className="flex items-center space-x-2">
+                        <span
+                          className={`font-medium ${
+                            message.userId === event.organizerUid ? "text-purple-600" : "text-blue-600"
+                          }`}
+                        >
+                          {message.userName}
+                          {message.userId === event.organizerUid && (
+                            <Badge variant="outline" className="ml-1 text-xs">
+                              Host
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="text-xs text-gray-500">{message.timestamp.toLocaleTimeString()}</span>
+                      </div>
+                      {isOrganizer && message.userId !== user?.uid && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                          onClick={() => deleteMessage(message.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      )}
                     </div>
-                    <p className="text-gray-800">{message.message}</p>
+                    <p className="text-gray-800 mb-2">{message.message}</p>
+
+                    {/* Reactions */}
+                    <div className="flex items-center space-x-1 mb-2">
+                      {Object.entries(message.reactions || {}).map(([emoji, userIds]) =>
+                        userIds.length > 0 ? (
+                          <button
+                            key={emoji}
+                            onClick={() => addReaction(message.id, emoji)}
+                            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                              userIds.includes(user?.uid || "")
+                                ? "bg-blue-100 border-blue-300"
+                                : "bg-gray-100 border-gray-300 hover:bg-gray-200"
+                            }`}
+                          >
+                            {emoji} {userIds.length}
+                          </button>
+                        ) : null,
+                      )}
+                      <div className="relative">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? false : message.id)}
+                        >
+                          <Smile className="w-3 h-3" />
+                        </Button>
+                        {showEmojiPicker === message.id && (
+                          <div className="absolute bottom-full left-0 mb-1 bg-white border rounded-lg shadow-lg p-2 z-10">
+                            <div className="grid grid-cols-4 gap-1">
+                              {EMOJI_LIST.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => {
+                                    addReaction(message.id, emoji)
+                                    setShowEmojiPicker(false)
+                                  }}
+                                  className="text-lg hover:bg-gray-100 rounded p-1"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
                 {chatMessages.length === 0 && (
@@ -173,24 +329,26 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
                     </p>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
             <div className="p-4 border-t">
               <div className="flex space-x-2">
                 <Input
-                  placeholder={
-                    event.status === "upcoming" ? "Chat available when event starts..." : "Type a message..."
-                  }
+                  placeholder={event.status === "live" ? "Type a message..." : "Chat available when event starts..."}
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
                   maxLength={500}
-                  disabled={event.status === "upcoming"}
+                  disabled={event.status !== "live"}
                 />
-                <Button onClick={sendMessage} disabled={!newMessage.trim() || event.status === "upcoming"}>
+                <Button onClick={sendMessage} disabled={!newMessage.trim() || event.status !== "live"}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
+              {isOrganizer && (
+                <p className="text-xs text-gray-500 mt-2">As the host, you can moderate messages and reactions</p>
+              )}
             </div>
           </CardContent>
         </Card>

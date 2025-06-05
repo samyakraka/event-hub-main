@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
-import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore"
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Event } from "@/types"
 import { Plus, Calendar, Users, DollarSign, BarChart3 } from "lucide-react"
@@ -111,6 +111,48 @@ export function OrganizerDashboard() {
 
       fetchEvents()
       fetchRevenueData()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const startEvent = async (eventId: string, eventTitle: string) => {
+    try {
+      await updateDoc(doc(db, "events", eventId), {
+        status: "live",
+      })
+
+      toast({
+        title: "Event Started!",
+        description: `"${eventTitle}" is now live.`,
+      })
+
+      fetchEvents()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const endEvent = async (eventId: string, eventTitle: string) => {
+    try {
+      await updateDoc(doc(db, "events", eventId), {
+        status: "completed",
+      })
+
+      toast({
+        title: "Event Ended",
+        description: `"${eventTitle}" has been marked as completed.`,
+      })
+
+      fetchEvents()
     } catch (error: any) {
       toast({
         title: "Error",
@@ -275,6 +317,26 @@ export function OrganizerDashboard() {
                         >
                           Edit
                         </Button>
+                        {event.status === "upcoming" && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => startEvent(event.id, event.title)}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            Start Event
+                          </Button>
+                        )}
+                        {event.status === "live" && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => endEvent(event.id, event.title)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            End Event
+                          </Button>
+                        )}
                         <Button variant="destructive" size="sm" onClick={() => deleteEvent(event.id, event.title)}>
                           Delete
                         </Button>

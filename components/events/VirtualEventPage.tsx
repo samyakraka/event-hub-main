@@ -136,7 +136,7 @@ export function VirtualEventPage({ eventId, onBack }: VirtualEventPageProps) {
                   </div>
                   <div className="flex items-center">
                     <MapPin className="w-4 h-4 mr-1" />
-                    Virtual Event
+                    {event.virtualType === "meeting" ? "Virtual Meeting" : "Live Broadcast"}
                   </div>
                 </div>
               </div>
@@ -152,7 +152,16 @@ export function VirtualEventPage({ eventId, onBack }: VirtualEventPageProps) {
             <CardTitle>About This Event</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-700">{event.description}</p>
+            <p className="text-gray-700 mb-4">{event.description}</p>
+            {event.isVirtual && (
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm font-medium text-blue-800">
+                  {event.virtualType === "meeting"
+                    ? "🎥 This is a virtual meeting event - you'll join via video call"
+                    : "📺 This is a live broadcast event with interactive chat"}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
