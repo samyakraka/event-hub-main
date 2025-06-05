@@ -45,6 +45,7 @@ export function EditEventDialog({ event, open, onOpenChange, onEventUpdated }: E
     discountEnabled: false,
     discountPercentage: 10,
     status: "upcoming",
+    virtualType: "meeting",
   })
 
   const steps = [
@@ -75,6 +76,7 @@ export function EditEventDialog({ event, open, onOpenChange, onEventUpdated }: E
         discountEnabled: event.discountEnabled,
         discountPercentage: event.discountPercentage || 10,
         status: event.status,
+        virtualType: event.virtualType || "meeting",
       })
     }
   }, [event])
@@ -297,18 +299,46 @@ export function EditEventDialog({ event, open, onOpenChange, onEventUpdated }: E
               </div>
 
               {formData.isVirtual ? (
-                <div>
-                  <Label htmlFor="virtualLink" className="text-base font-semibold">
-                    Virtual Event Link
-                  </Label>
-                  <Input
-                    id="virtualLink"
-                    type="url"
-                    value={formData.virtualLink}
-                    onChange={(e) => handleInputChange("virtualLink", e.target.value)}
-                    placeholder="https://zoom.us/j/..."
-                    className="mt-2 h-12"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-base font-semibold">Virtual Event Type</Label>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      <div
+                        className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                          formData.virtualType === "meeting" ? "border-blue-500 bg-blue-50" : "border-gray-200"
+                        }`}
+                        onClick={() => handleInputChange("virtualType", "meeting")}
+                      >
+                        <h4 className="font-medium">Meeting Link</h4>
+                        <p className="text-sm text-gray-600">Zoom, Teams, or other meeting platform</p>
+                      </div>
+                      <div
+                        className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                          formData.virtualType === "broadcast" ? "border-blue-500 bg-blue-50" : "border-gray-200"
+                        }`}
+                        onClick={() => handleInputChange("virtualType", "broadcast")}
+                      >
+                        <h4 className="font-medium">Live Broadcast</h4>
+                        <p className="text-sm text-gray-600">YouTube, website, or streaming platform</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="virtualLink" className="text-base font-semibold">
+                      {formData.virtualType === "meeting" ? "Meeting Link" : "Broadcast URL"}
+                    </Label>
+                    <Input
+                      id="virtualLink"
+                      type="url"
+                      value={formData.virtualLink}
+                      onChange={(e) => handleInputChange("virtualLink", e.target.value)}
+                      placeholder={
+                        formData.virtualType === "meeting" ? "https://zoom.us/j/..." : "https://youtube.com/watch?v=..."
+                      }
+                      className="mt-2 h-12"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div>
