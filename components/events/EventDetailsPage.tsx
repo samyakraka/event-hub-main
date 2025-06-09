@@ -99,7 +99,7 @@ export function EventDetailsPage({ eventId, onBack }: EventDetailsPageProps) {
   }
 
   const checkedInCount = tickets.filter((t) => t.checkedIn).length
-  const totalRevenue = tickets.reduce((sum, ticket) => sum + (event.ticketPrice || 0), 0)
+  const totalRevenue = tickets.reduce((sum, ticket) => sum + (ticket.finalPrice ?? event.ticketPrice ?? 0), 0)
   const totalDonations = donations.reduce((sum, donation) => sum + donation.amount, 0)
 
   return (
