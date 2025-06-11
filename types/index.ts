@@ -14,6 +14,7 @@ export interface Event {
   type: "gala" | "concert" | "marathon" | "webinar" | "conference" | "workshop"
   location?: string
   virtualLink?: string
+  virtualType?: "meeting" | "broadcast"
   date: Date
   time: string
   endTime: string
@@ -25,6 +26,7 @@ export interface Event {
   maxAttendees?: number
   ticketPrice: number
   isVirtual: boolean
+  requiresCheckIn: boolean // Now required for ALL events
   discountEnabled: boolean
   discountPercentage?: number
   createdAt: Date
@@ -40,6 +42,7 @@ export interface Ticket {
   finalPrice: number
   discountAmount?: number
   checkedIn: boolean
+  checkInTime?: Date
   registrationData: Record<string, any>
   createdAt: Date
 }
@@ -51,6 +54,7 @@ export interface LiveChat {
   userName: string
   message: string
   timestamp: Date
+  reactions?: { [emoji: string]: string[] }
 }
 
 export interface Donation {

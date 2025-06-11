@@ -14,7 +14,7 @@ import { db } from "@/lib/firebase"
 import type { Event } from "@/types"
 import { toast } from "@/hooks/use-toast"
 import { format } from "date-fns"
-import { Calendar, Clock, MapPin, DollarSign } from "lucide-react"
+import { Calendar, Clock, MapPin, DollarSign, Share2, CheckCircle, Sparkles } from "lucide-react"
 import { v4 as uuidv4 } from "uuid"
 
 interface EventRegistrationDialogProps {
@@ -32,6 +32,7 @@ export function EventRegistrationDialog({
 }: EventRegistrationDialogProps) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [showThankYou, setShowThankYou] = useState(false)
   const [discountCode, setDiscountCode] = useState("")
   const [calculatedPrice, setCalculatedPrice] = useState(event.ticketPrice)
   const [discountAmount, setDiscountAmount] = useState(0)
@@ -153,13 +154,8 @@ export function EventRegistrationDialog({
         await addDoc(collection(db, "donations"), donationData)
       }
 
-      toast({
-        title: "Registration Successful!",
-        description: "You've been registered for the event. Check your email for confirmation.",
-      })
-
+      setShowThankYou(true)
       onRegistrationComplete()
-      onOpenChange(false)
     } catch (error: any) {
       toast({
         title: "Registration Failed",
@@ -171,134 +167,269 @@ export function EventRegistrationDialog({
     }
   }
 
+  const shareEvent = async () => {
+    const shareData = {
+      title: event.title,
+      text: `Check out this amazing event: ${event.title}`,
+      url: window.location.origin,
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch (error) {
+        // Fallback to copying URL
+        copyEventLink()
+      }
+    } else {
+      copyEventLink()
+    }
+  }
+
+  const copyEventLink = () => {
+    navigator.clipboard.writeText(window.location.origin).then(() => {
+      toast({
+        title: "Link Copied!",
+        description: "Event link copied to clipboard",
+      })
+    })
+  }
+
+  const handleClose = () => {
+    setShowThankYou(false)
+    onOpenChange(false)
+    // Reset form
+    setFormData({
+      firstName: "",
+      lastName: "",
+      email: user?.email || "",
+      phone: "",
+      specialRequests: "",
+      discountCode: "",
+    })
+    setDiscountCode("")
+    setDonationAmount(0)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Register for {event.title}</DialogTitle>
-          <DialogDescription>Complete your registration for this event</DialogDescription>
-        </DialogHeader>
+        {showThankYou ? (
+          // Thank You Screen
+          <div className="text-center py-8">
+            <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-10 h-10 text-white" />
+            </div>
 
-        {/* Event Details */}
-        <div className="bg-gray-50 rounded-lg p-4 mb-6">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center">
-              <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-              {format(event.date, "MMM dd, yyyy")}
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Registration Successful! 🎉</h2>
+            <p className="text-lg text-gray-600 mb-6">
+              You're all set for <span className="font-semibold text-gray-900">{event.title}</span>
+            </p>
+
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <Sparkles className="w-6 h-6 text-blue-600 mr-2" />
+                <h3 className="text-xl font-semibold text-gray-900">What's Next?</h3>
+              </div>
+              <div className="space-y-3 text-sm text-gray-700">
+                <div className="flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                  <span>Check your email for confirmation details</span>
+                </div>
+                <div className="flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                  <span>Your QR code ticket is ready in "My Tickets"</span>
+                </div>
+                <div className="flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                  <span>Add the event to your calendar</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center">
-              <Clock className="w-4 h-4 mr-2 text-gray-500" />
-              {event.time}
+
+            {/* Event Summary */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+              <h4 className="font-semibold text-gray-900 mb-3">Event Summary</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  {format(event.date, "MMM dd, yyyy")}
+                </div>
+                <div className="flex items-center">
+                  <Clock className="w-4 h-4 mr-2 text-gray-500" />
+                  {event.time}
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+                  {event.isVirtual ? "Virtual Event" : event.location}
+                </div>
+                <div className="flex items-center">
+                  <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
+                  {calculatedPrice === 0 ? "Free" : `$${calculatedPrice.toFixed(2)}`}
+                </div>
+              </div>
             </div>
-            <div className="flex items-center">
-              <MapPin className="w-4 h-4 mr-2 text-gray-500" />
-              {event.isVirtual ? "Virtual Event" : event.location}
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={shareEvent}
+                variant="outline"
+                className="flex items-center space-x-2 border-blue-200 hover:bg-blue-50"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Share Event</span>
+              </Button>
+              <Button
+                onClick={handleClose}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                Back to Events
+              </Button>
             </div>
-            <div className="flex items-center">
-              <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
-              {event.ticketPrice === 0 ? "Free" : `$${event.ticketPrice}`}
-            </div>
+
+            <p className="text-xs text-gray-500 mt-6">
+              Need help? Contact the event organizer or check our support center.
+            </p>
           </div>
-        </div>
+        ) : (
+          // Registration Form
+          <>
+            <DialogHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <DialogTitle>Register for {event.title}</DialogTitle>
+                  <DialogDescription>Complete your registration for this event</DialogDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={shareEvent} className="flex items-center space-x-2">
+                  <Share2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Share</span>
+                </Button>
+              </div>
+            </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name *</Label>
-              <Input
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => handleInputChange("firstName", e.target.value)}
-                required
-              />
+            {/* Event Details */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  {format(event.date, "MMM dd, yyyy")}
+                </div>
+                <div className="flex items-center">
+                  <Clock className="w-4 h-4 mr-2 text-gray-500" />
+                  {event.time}
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+                  {event.isVirtual ? "Virtual Event" : event.location}
+                </div>
+                <div className="flex items-center">
+                  <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
+                  {event.ticketPrice === 0 ? "Free" : `$${event.ticketPrice}`}
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name *</Label>
-              <Input
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => handleInputChange("lastName", e.target.value)}
-                required
-              />
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange("email", e.target.value)}
-              required
-            />
-          </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name *</Label>
+                  <Input
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(e) => handleInputChange("firstName", e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name *</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange("lastName", e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone Number</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => handleInputChange("phone", e.target.value)}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  required
+                />
+              </div>
 
-          {event.discountEnabled && (
-            <div className="space-y-2">
-              <Label htmlFor="discountCode">Discount Code (optional)</Label>
-              <Input
-                id="discountCode"
-                value={discountCode}
-                onChange={(e) => {
-                  setDiscountCode(e.target.value)
-                  setFormData((prev) => ({ ...prev, discountCode: e.target.value }))
-                }}
-                placeholder="Enter discount code"
-              />
-              {discountAmount > 0 && (
-                <p className="text-sm text-green-600">Discount applied: -${discountAmount.toFixed(2)}</p>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                />
+              </div>
+
+              {event.discountEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="discountCode">Discount Code (optional)</Label>
+                  <Input
+                    id="discountCode"
+                    value={discountCode}
+                    onChange={(e) => {
+                      setDiscountCode(e.target.value)
+                      setFormData((prev) => ({ ...prev, discountCode: e.target.value }))
+                    }}
+                    placeholder="Enter discount code"
+                  />
+                  {discountAmount > 0 && (
+                    <p className="text-sm text-green-600">Discount applied: -${discountAmount.toFixed(2)}</p>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="specialRequests">Special Requests</Label>
-            <Textarea
-              id="specialRequests"
-              value={formData.specialRequests}
-              onChange={(e) => handleInputChange("specialRequests", e.target.value)}
-              placeholder="Any dietary restrictions, accessibility needs, etc."
-              rows={3}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="specialRequests">Special Requests</Label>
+                <Textarea
+                  id="specialRequests"
+                  value={formData.specialRequests}
+                  onChange={(e) => handleInputChange("specialRequests", e.target.value)}
+                  placeholder="Any dietary restrictions, accessibility needs, etc."
+                  rows={3}
+                />
+              </div>
 
-          {/* Donation Section */}
-          <div className="border-t pt-4">
-            <Label htmlFor="donation">Optional Donation ($)</Label>
-            <Input
-              id="donation"
-              type="number"
-              min="0"
-              step="0.01"
-              value={donationAmount}
-              onChange={(e) => setDonationAmount(Number(e.target.value))}
-              placeholder="0.00"
-            />
-            <p className="text-sm text-gray-600 mt-1">Support this event with an optional donation</p>
-          </div>
+              {/* Donation Section */}
+              <div className="border-t pt-4">
+                <Label htmlFor="donation">Optional Donation ($)</Label>
+                <Input
+                  id="donation"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={donationAmount}
+                  onChange={(e) => setDonationAmount(Number(e.target.value))}
+                  placeholder="0.00"
+                />
+                <p className="text-sm text-gray-600 mt-1">Support this event with an optional donation</p>
+              </div>
 
-          <div className="flex justify-end space-x-4 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading
-                ? "Registering..."
-                : `Register ${calculatedPrice > 0 ? `($${calculatedPrice.toFixed(2)})` : "(Free)"}`}
-            </Button>
-          </div>
-        </form>
+              <div className="flex justify-end space-x-4 pt-4">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading
+                    ? "Registering..."
+                    : `Register ${calculatedPrice > 0 ? `($${calculatedPrice.toFixed(2)})` : "(Free)"}`}
+                </Button>
+              </div>
+            </form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

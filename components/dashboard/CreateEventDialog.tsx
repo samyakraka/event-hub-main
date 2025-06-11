@@ -14,7 +14,19 @@ import { useAuth } from "@/contexts/AuthContext"
 import { collection, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { toast } from "@/hooks/use-toast"
-import { ChevronLeft, ChevronRight, Upload, X, Calendar, MapPin, Clock, DollarSign, Users, Percent } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  Upload,
+  X,
+  Calendar,
+  MapPin,
+  Clock,
+  DollarSign,
+  Users,
+  Percent,
+  Shield,
+} from "lucide-react"
 
 interface CreateEventDialogProps {
   open: boolean
@@ -40,6 +52,7 @@ export function CreateEventDialog({ open, onOpenChange, onEventCreated }: Create
     ticketPrice: 0,
     maxAttendees: "",
     isVirtual: false,
+    requiresCheckIn: true, // Default to true for all events
     logoBase64: "",
     bannerBase64: "",
     discountEnabled: false,
@@ -50,7 +63,7 @@ export function CreateEventDialog({ open, onOpenChange, onEventCreated }: Create
     { id: 1, title: "Basic Info", icon: Calendar },
     { id: 2, title: "Location & Time", icon: MapPin },
     { id: 3, title: "Images", icon: Upload },
-    { id: 4, title: "Pricing & Discounts", icon: DollarSign },
+    { id: 4, title: "Pricing & Access", icon: DollarSign },
     { id: 5, title: "Preview", icon: Users },
   ]
 
@@ -136,6 +149,7 @@ export function CreateEventDialog({ open, onOpenChange, onEventCreated }: Create
       ticketPrice: 0,
       maxAttendees: "",
       isVirtual: false,
+      requiresCheckIn: true,
       logoBase64: "",
       bannerBase64: "",
       discountEnabled: false,
@@ -512,6 +526,40 @@ export function CreateEventDialog({ open, onOpenChange, onEventCreated }: Create
                 <p className="text-sm text-gray-500 mt-1">Set to 0 for free events</p>
               </div>
 
+              {/* Check-in Requirement */}
+              <div className="p-4 bg-orange-50 rounded-lg">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Switch
+                    id="requiresCheckIn"
+                    checked={formData.requiresCheckIn}
+                    onCheckedChange={(checked) => handleInputChange("requiresCheckIn", checked)}
+                  />
+                  <Label htmlFor="requiresCheckIn" className="text-base font-semibold flex items-center">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Require Check-in for Access
+                  </Label>
+                </div>
+                <p className="text-sm text-orange-700 mb-2">
+                  {formData.requiresCheckIn
+                    ? formData.isVirtual
+                      ? "Attendees must be checked in by an organizer before accessing the virtual event content."
+                      : "Attendees must be checked in at the venue before accessing event content."
+                    : "Attendees can access event content immediately after registration."}
+                </p>
+                {formData.requiresCheckIn && (
+                  <div className="mt-3 p-3 bg-white rounded border">
+                    <p className="text-sm font-medium text-orange-800">Security Benefits:</p>
+                    <ul className="text-sm text-orange-700 mt-1 list-disc list-inside">
+                      <li>Prevents unauthorized access</li>
+                      <li>Ensures only verified attendees participate</li>
+                      <li>Provides accurate attendance tracking</li>
+                      <li>Enables better event management</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Discount Codes */}
               <div className="p-4 bg-purple-50 rounded-lg">
                 <div className="flex items-center space-x-2 mb-4">
                   <Switch
@@ -604,13 +652,25 @@ export function CreateEventDialog({ open, onOpenChange, onEventCreated }: Create
                     </div>
                   </div>
 
-                  {formData.discountEnabled && (
-                    <div className="mt-4 p-3 bg-purple-50 rounded">
-                      <p className="text-sm font-medium text-purple-800">
-                        Discount Codes Enabled: {formData.discountPercentage}% off
-                      </p>
-                    </div>
-                  )}
+                  {/* Access Requirements */}
+                  <div className="mt-4 space-y-2">
+                    {formData.requiresCheckIn && (
+                      <div className="p-3 bg-orange-50 rounded">
+                        <p className="text-sm font-medium text-orange-800 flex items-center">
+                          <Shield className="w-4 h-4 mr-2" />
+                          Check-in Required for Access
+                        </p>
+                      </div>
+                    )}
+
+                    {formData.discountEnabled && (
+                      <div className="p-3 bg-purple-50 rounded">
+                        <p className="text-sm font-medium text-purple-800">
+                          Discount Codes Enabled: {formData.discountPercentage}% off
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>

@@ -19,15 +19,23 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Event, LiveChat } from "@/types"
-import { Send, Trash2, ExternalLink, MessageCircle, Users, Play, Pause } from "lucide-react"
+import { Send, Trash2, ExternalLink, MessageCircle, Users, Play, Pause, Shield, Clock } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 interface LiveStreamViewerProps {
   event: Event
   hasAccess: boolean
+}
+
+interface VideoState {
+  isPlaying: boolean
+  currentTime: number
+  lastUpdated: number
+  duration?: number
 }
 
 // YouTube URL utilities
@@ -50,10 +58,16 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
   const [newMessage, setNewMessage] = useState("")
   const [loading, setLoading] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"stream" | "chat">("stream")
-  const [isPlaying, setIsPlaying] = useState(true)
+  const [videoState, setVideoState] = useState<VideoState>({
+    isPlaying: true,
+    currentTime: 0,
+    lastUpdated: Date.now(),
+  })
+  const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error">("synced")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastSyncTimeRef = useRef<number>(0)
 
   const isOrganizer = user?.uid === event.organizerUid
   const isYouTube = event.virtualLink && isYouTubeUrl(event.virtualLink)
@@ -83,10 +97,185 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
     return () => unsubscribe()
   }, [event.id, hasAccess, event.status])
 
+  // Real-time video state synchronization
+  useEffect(() => {
+    if (!hasAccess || event.status !== "live" || !isYouTube) return
+
+    const videoStateDoc = doc(db, "videoStates", event.id)
+
+    const unsubscribe = onSnapshot(videoStateDoc, (doc) => {
+      if (doc.exists()) {
+        const state = doc.data() as VideoState
+        setVideoState(state)
+
+        // For attendees, immediately sync with host's state
+        if (!isOrganizer && iframeRef.current) {
+          syncWithHost(state)
+        }
+      } else if (isOrganizer) {
+        // Initialize video state for organizer
+        const initialState: VideoState = {
+          isPlaying: true,
+          currentTime: 0,
+          lastUpdated: Date.now(),
+        }
+        setDoc(videoStateDoc, initialState)
+        setVideoState(initialState)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [event.id, hasAccess, event.status, isYouTube, isOrganizer])
+
+  // Continuous sync for attendees
+  useEffect(() => {
+    if (isOrganizer || !hasAccess || event.status !== "live" || !isYouTube) return
+
+    // Sync every 2 seconds to maintain timeline accuracy
+    syncIntervalRef.current = setInterval(() => {
+      if (videoState.lastUpdated > lastSyncTimeRef.current) {
+        syncWithHost(videoState)
+        lastSyncTimeRef.current = videoState.lastUpdated
+      }
+    }, 2000)
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current)
+      }
+    }
+  }, [isOrganizer, hasAccess, event.status, isYouTube, videoState])
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  const syncWithHost = (hostState: VideoState) => {
+    if (!iframeRef.current || isOrganizer) return
+
+    setSyncStatus("syncing")
+
+    try {
+      const iframe = iframeRef.current
+      const now = Date.now()
+      const timeDiff = (now - hostState.lastUpdated) / 1000
+
+      // Calculate the current time based on host's state and time elapsed
+      let targetTime = hostState.currentTime
+      if (hostState.isPlaying) {
+        targetTime += timeDiff
+      }
+
+      // Seek to the correct time
+      iframe.contentWindow?.postMessage(
+        JSON.stringify({
+          event: "command",
+          func: "seekTo",
+          args: [targetTime, true],
+        }),
+        "*",
+      )
+
+      // Set play/pause state
+      iframe.contentWindow?.postMessage(
+        JSON.stringify({
+          event: "command",
+          func: hostState.isPlaying ? "playVideo" : "pauseVideo",
+          args: "",
+        }),
+        "*",
+      )
+
+      setSyncStatus("synced")
+    } catch (error) {
+      console.error("Sync error:", error)
+      setSyncStatus("error")
+    }
+  }
+
+  const updateVideoState = async (newState: Partial<VideoState>) => {
+    if (!isOrganizer) return
+
+    const updatedState: VideoState = {
+      ...videoState,
+      ...newState,
+      lastUpdated: Date.now(),
+    }
+
+    try {
+      await setDoc(doc(db, "videoStates", event.id), updatedState)
+      setVideoState(updatedState)
+    } catch (error) {
+      console.error("Failed to update video state:", error)
+      toast({
+        title: "Error",
+        description: "Failed to sync video state",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleOrganizerPlayPause = async () => {
+    if (!isOrganizer || !iframeRef.current) return
+
+    const newPlayingState = !videoState.isPlaying
+
+    // Update local state immediately
+    const newState = {
+      ...videoState,
+      isPlaying: newPlayingState,
+      lastUpdated: Date.now(),
+    }
+    setVideoState(newState)
+
+    // Control the organizer's video
+    const iframe = iframeRef.current
+    iframe.contentWindow?.postMessage(
+      JSON.stringify({
+        event: "command",
+        func: newPlayingState ? "playVideo" : "pauseVideo",
+        args: "",
+      }),
+      "*",
+    )
+
+    // Update Firestore to sync with attendees
+    await updateVideoState({
+      isPlaying: newPlayingState,
+      currentTime: videoState.currentTime,
+    })
+
+    toast({
+      title: newPlayingState ? "Video Resumed" : "Video Paused",
+      description: "All attendees are now synchronized",
+    })
+  }
+
+  // Listen for YouTube player events (organizer only)
+  useEffect(() => {
+    if (!isOrganizer || !isYouTube) return
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== "https://www.youtube.com") return
+
+      try {
+        const data = JSON.parse(event.data)
+        if (data.event === "video-progress") {
+          // Update current time periodically
+          updateVideoState({
+            currentTime: data.info.currentTime,
+            isPlaying: videoState.isPlaying,
+          })
+        }
+      } catch (error) {
+        // Ignore parsing errors
+      }
+    }
+
+    window.addEventListener("message", handleMessage)
+    return () => window.removeEventListener("message", handleMessage)
+  }, [isOrganizer, isYouTube, videoState.isPlaying])
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !user || !hasAccess) return
@@ -142,13 +331,11 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
 
     let updatedReactions
     if (emojiReactions.includes(user.uid)) {
-      // Remove reaction
       updatedReactions = {
         ...reactions,
         [emoji]: emojiReactions.filter((uid) => uid !== user.uid),
       }
     } else {
-      // Add reaction
       updatedReactions = {
         ...reactions,
         [emoji]: [...emojiReactions, user.uid],
@@ -175,49 +362,93 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
     }
   }
 
-  const toggleYouTubePlayback = () => {
-    if (iframeRef.current && youtubeVideoId) {
-      const iframe = iframeRef.current
-      const command = isPlaying ? "pauseVideo" : "playVideo"
-      iframe.contentWindow?.postMessage(`{"event":"command","func":"${command}","args":""}`, "*")
-      setIsPlaying(!isPlaying)
-    }
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
   const renderYouTubeEmbed = () => {
     if (!youtubeVideoId) return null
+
+    // Organizer gets full controls, attendees get no controls at all
+    const embedParams = isOrganizer
+      ? "enablejsapi=1&autoplay=1&controls=1&rel=0&modestbranding=1&origin=" + window.location.origin
+      : "enablejsapi=1&autoplay=1&controls=0&rel=0&modestbranding=1&disablekb=1&fs=0&iv_load_policy=3&origin=" +
+        window.location.origin
 
     return (
       <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
         <iframe
           ref={iframeRef}
           className="absolute top-0 left-0 w-full h-full rounded-lg"
-          src={`https://www.youtube.com/embed/${youtubeVideoId}?enablejsapi=1&autoplay=1&mute=0&controls=1&rel=0`}
+          src={`https://www.youtube.com/embed/${youtubeVideoId}?${embedParams}`}
           title="YouTube Live Stream"
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
+          allowFullScreen={isOrganizer}
         />
 
-        {/* Custom controls overlay */}
-        <div className="absolute bottom-4 left-4 flex space-x-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={toggleYouTubePlayback}
-            className="bg-black/50 text-white hover:bg-black/70"
-          >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => window.open(event.virtualLink, "_blank")}
-            className="bg-black/50 text-white hover:bg-black/70"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </Button>
-        </div>
+        {/* Organizer controls overlay */}
+        {isOrganizer && (
+          <div className="absolute bottom-4 left-4 flex space-x-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleOrganizerPlayPause}
+              className="bg-black/70 text-white hover:bg-black/90"
+            >
+              {videoState.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => window.open(event.virtualLink, "_blank")}
+              className="bg-black/70 text-white hover:bg-black/90"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+            <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+              <Shield className="w-3 h-3 mr-1" />
+              Host Controls
+            </Badge>
+          </div>
+        )}
+
+        {/* Attendee sync status */}
+        {!isOrganizer && (
+          <div className="absolute bottom-4 right-4 flex space-x-2">
+            <Badge
+              variant="secondary"
+              className={`${
+                syncStatus === "synced"
+                  ? "bg-green-100 text-green-800"
+                  : syncStatus === "syncing"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : "bg-red-100 text-red-800"
+              }`}
+            >
+              <Clock className="w-3 h-3 mr-1" />
+              {syncStatus === "synced" ? "Synced with Host" : syncStatus === "syncing" ? "Syncing..." : "Sync Error"}
+            </Badge>
+            {videoState.currentTime > 0 && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                {formatTime(videoState.currentTime)}
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Invisible overlay to prevent attendee interaction */}
+        {!isOrganizer && (
+          <div
+            className="absolute inset-0 bg-transparent cursor-default"
+            style={{ pointerEvents: "auto" }}
+            onContextMenu={(e) => e.preventDefault()}
+            onDoubleClick={(e) => e.preventDefault()}
+            onClick={(e) => e.preventDefault()}
+          />
+        )}
       </div>
     )
   }
@@ -233,8 +464,16 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
           title="Live Stream"
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
+          allowFullScreen={isOrganizer}
         />
+
+        {!isOrganizer && (
+          <div className="absolute bottom-4 right-4">
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+              Live Stream
+            </Badge>
+          </div>
+        )}
       </div>
     )
   }
@@ -302,19 +541,59 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Live Stream</span>
-              {isYouTube && (
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                  YouTube Live
-                </Badge>
-              )}
+              <div className="flex items-center space-x-2">
+                <span>Live Stream</span>
+                {isOrganizer && (
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                    <Shield className="w-3 h-3 mr-1" />
+                    Host View
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                {isYouTube && (
+                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                    YouTube Live
+                  </Badge>
+                )}
+                {!isOrganizer && videoState.isPlaying && (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1" />
+                    Live
+                  </Badge>
+                )}
+              </div>
             </CardTitle>
           </CardHeader>
-          <CardContent>{isYouTube ? renderYouTubeEmbed() : renderGenericEmbed()}</CardContent>
+          <CardContent>
+            {isYouTube ? renderYouTubeEmbed() : renderGenericEmbed()}
+
+            {/* Control instructions for organizer */}
+            {isOrganizer && isYouTube && (
+              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm text-purple-800">
+                  <Shield className="w-4 h-4 inline mr-1" />
+                  <strong>Host Controls:</strong> You control the video for all attendees. Any play/pause actions will
+                  sync to everyone instantly.
+                </p>
+              </div>
+            )}
+
+            {/* Information for attendees */}
+            {!isOrganizer && isYouTube && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <Clock className="w-4 h-4 inline mr-1" />
+                  <strong>Synchronized Viewing:</strong> You're watching in sync with the host. The video timeline is
+                  automatically managed.
+                </p>
+              </div>
+            )}
+          </CardContent>
         </Card>
       </div>
 
-      {/* Chat Section */}
+      {/* Chat Section - Same as before */}
       <div className="lg:col-span-1">
         <Card className="h-[600px] flex flex-col">
           <CardHeader className="pb-3">
@@ -341,7 +620,8 @@ export function LiveStreamViewer({ event, hasAccess }: LiveStreamViewerProps) {
                         <div className="flex items-center space-x-2 mb-1">
                           <span className="font-medium text-sm">{message.userName}</span>
                           {message.userId === event.organizerUid && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800">
+                              <Shield className="w-3 h-3 mr-1" />
                               Host
                             </Badge>
                           )}

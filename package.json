@@ -29,11 +29,13 @@
     "date-fns": "^3.0.6",
     "deps": "^1.0.0",
     "firebase": "^10.7.1",
+    "html5-qrcode": "^2.2.7",
     "lucide-react": "^0.400.0",
     "next": "^15.1.0",
     "peer": "^1.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-qr-code": "^2.0.15",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^9.0.1"

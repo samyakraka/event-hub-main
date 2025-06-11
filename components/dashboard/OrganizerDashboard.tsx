@@ -8,12 +8,27 @@ import { useAuth } from "@/contexts/AuthContext"
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Event } from "@/types"
-import { Plus, Calendar, Users, DollarSign, BarChart3 } from "lucide-react"
+import {
+  Plus,
+  Calendar,
+  Users,
+  DollarSign,
+  BarChart3,
+  Menu,
+  X,
+  User,
+  MoreVertical,
+  Play,
+  Square,
+  Trash2,
+  Edit,
+} from "lucide-react"
 import { CreateEventDialog } from "./CreateEventDialog"
 import { format } from "date-fns"
 import { EventDetailsPage } from "../events/EventDetailsPage"
 import { EditEventDialog } from "./EditEventDialog"
 import { toast } from "@/components/ui/use-toast"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export function OrganizerDashboard() {
   const { user, logout } = useAuth()
@@ -25,6 +40,7 @@ export function OrganizerDashboard() {
   const [totalTickets, setTotalTickets] = useState(0)
   const [showEditEvent, setShowEditEvent] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   useEffect(() => {
     fetchEvents()
@@ -35,7 +51,6 @@ export function OrganizerDashboard() {
     if (!user) return
 
     try {
-      // Use a simpler query that doesn't require a composite index
       const q = query(collection(db, "events"), where("organizerUid", "==", user.uid))
       const querySnapshot = await getDocs(q)
       const eventsData = querySnapshot.docs.map((doc) => ({
@@ -45,7 +60,6 @@ export function OrganizerDashboard() {
         createdAt: doc.data().createdAt.toDate(),
       })) as Event[]
 
-      // Sort in memory instead of using Firestore orderBy
       eventsData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       setEvents(eventsData)
     } catch (error) {
@@ -59,7 +73,6 @@ export function OrganizerDashboard() {
     if (!user) return
 
     try {
-      // Get all events for this organizer
       const eventsQuery = query(collection(db, "events"), where("organizerUid", "==", user.uid))
       const eventsSnapshot = await getDocs(eventsQuery)
       const eventIds = eventsSnapshot.docs.map((doc) => doc.id)
@@ -70,7 +83,6 @@ export function OrganizerDashboard() {
         return
       }
 
-      // Get all tickets for these events
       let revenue = 0
       let ticketCount = 0
 
@@ -98,11 +110,7 @@ export function OrganizerDashboard() {
     }
 
     try {
-      // Delete the event
       await deleteDoc(doc(db, "events", eventId))
-
-      // Note: In a production app, you might want to also delete related tickets, donations, etc.
-      // For now, we'll just delete the event document
 
       toast({
         title: "Event Deleted",
@@ -177,10 +185,10 @@ export function OrganizerDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Loading your dashboard...</p>
+          <p className="text-gray-600">Loading your dashboard...</p>
         </div>
       </div>
     )
@@ -192,49 +200,98 @@ export function OrganizerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      {/* Enhanced Header */}
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">EventHub</h1>
-              <p className="text-gray-600">Welcome back, {user?.displayName}</p>
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">EventHub</h1>
+                <p className="text-sm text-gray-600 hidden sm:block">Welcome back, {user?.displayName}</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Button onClick={() => setShowCreateEvent(true)}>
+
+            {/* Desktop Actions */}
+            <div className="hidden md:flex items-center space-x-3">
+              <Button
+                onClick={() => setShowCreateEvent(true)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Event
               </Button>
-              <Button variant="outline" onClick={logout}>
-                Sign Out
+              <Button variant="outline" onClick={logout} className="flex items-center space-x-2">
+                <User className="w-4 h-4" />
+                <span>Sign Out</span>
+              </Button>
+            </div>
+
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button variant="ghost" size="sm" onClick={() => setShowMobileMenu(!showMobileMenu)} className="p-2">
+                {showMobileMenu ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </Button>
             </div>
           </div>
+
+          {/* Mobile Menu */}
+          {showMobileMenu && (
+            <div className="md:hidden border-t border-gray-200 py-4 space-y-3">
+              <Button
+                onClick={() => {
+                  setShowCreateEvent(true)
+                  setShowMobileMenu(false)
+                }}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Event
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  logout()
+                  setShowMobileMenu(false)
+                }}
+                className="w-full justify-start"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardContent className="p-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Enhanced Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center">
-                <Calendar className="w-8 h-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Events</p>
-                  <p className="text-2xl font-bold text-gray-900">{events.length}</p>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                </div>
+                <div className="ml-3 sm:ml-4">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">Total Events</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">{events.length}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center">
-                <Users className="w-8 h-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Active Events</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                </div>
+                <div className="ml-3 sm:ml-4">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">Active Events</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">
                     {events.filter((e) => e.status === "upcoming" || e.status === "live").length}
                   </p>
                 </div>
@@ -242,36 +299,51 @@ export function OrganizerDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center">
-                <DollarSign className="w-8 h-8 text-yellow-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">${totalRevenue.toFixed(2)}</p>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
+                </div>
+                <div className="ml-3 sm:ml-4">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">Total Revenue</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900">${totalRevenue.toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center">
-                <BarChart3 className="w-8 h-8 text-purple-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Attendees</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalTickets}</p>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+                </div>
+                <div className="ml-3 sm:ml-4">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600">Total Attendees</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">{totalTickets}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Events List */}
+        {/* Enhanced Events List */}
         <Card>
-          <CardHeader>
-            <CardTitle>Your Events</CardTitle>
-            <CardDescription>Manage and monitor your events</CardDescription>
+          <CardHeader className="pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
+              <div>
+                <CardTitle className="text-lg sm:text-xl">Your Events</CardTitle>
+                <CardDescription>Manage and monitor your events</CardDescription>
+              </div>
+              <Button
+                onClick={() => setShowCreateEvent(true)}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full sm:w-auto"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Event
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {events.length === 0 ? (
@@ -279,7 +351,10 @@ export function OrganizerDashboard() {
                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No events yet</h3>
                 <p className="text-gray-600 mb-4">Get started by creating your first event</p>
-                <Button onClick={() => setShowCreateEvent(true)}>
+                <Button
+                  onClick={() => setShowCreateEvent(true)}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Create Your First Event
                 </Button>
@@ -287,23 +362,33 @@ export function OrganizerDashboard() {
             ) : (
               <div className="space-y-4">
                 {events.map((event) => (
-                  <div key={event.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-lg font-semibold">{event.title}</h3>
+                  <div key={event.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between space-y-4 sm:space-y-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold truncate">{event.title}</h3>
                           <Badge className={getStatusColor(event.status)}>{event.status}</Badge>
                           <Badge variant="outline">{event.type}</Badge>
+                          {event.isVirtual && (
+                            <Badge variant="outline" className="bg-purple-50 text-purple-700">
+                              Virtual
+                            </Badge>
+                          )}
                         </div>
-                        <p className="text-gray-600 mb-2">{event.description}</p>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                          <span>{format(event.date, "MMM dd, yyyy")}</span>
+                        <p className="text-gray-600 mb-2 line-clamp-2">{event.description}</p>
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                          <span className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1" />
+                            {format(event.date, "MMM dd, yyyy")}
+                          </span>
                           <span>{event.time}</span>
-                          <span>{event.isVirtual ? "Virtual" : event.location}</span>
+                          <span className="truncate">{event.isVirtual ? "Virtual" : event.location}</span>
                           <span>${event.ticketPrice === 0 ? "Free" : event.ticketPrice}</span>
                         </div>
                       </div>
-                      <div className="flex space-x-2">
+
+                      {/* Desktop Actions */}
+                      <div className="hidden sm:flex space-x-2">
                         <Button variant="outline" size="sm" onClick={() => setSelectedEventId(event.id)}>
                           Manage
                         </Button>
@@ -315,7 +400,7 @@ export function OrganizerDashboard() {
                             setShowEditEvent(true)
                           }}
                         >
-                          Edit
+                          <Edit className="w-4 h-4" />
                         </Button>
                         {event.status === "upcoming" && (
                           <Button
@@ -324,7 +409,7 @@ export function OrganizerDashboard() {
                             onClick={() => startEvent(event.id, event.title)}
                             className="bg-green-600 hover:bg-green-700"
                           >
-                            Start Event
+                            <Play className="w-4 h-4" />
                           </Button>
                         )}
                         {event.status === "live" && (
@@ -334,12 +419,52 @@ export function OrganizerDashboard() {
                             onClick={() => endEvent(event.id, event.title)}
                             className="bg-red-600 hover:bg-red-700"
                           >
-                            End Event
+                            <Square className="w-4 h-4" />
                           </Button>
                         )}
                         <Button variant="destructive" size="sm" onClick={() => deleteEvent(event.id, event.title)}>
-                          Delete
+                          <Trash2 className="w-4 h-4" />
                         </Button>
+                      </div>
+
+                      {/* Mobile Actions */}
+                      <div className="sm:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => setSelectedEventId(event.id)}>
+                              Manage Event
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedEvent(event)
+                                setShowEditEvent(true)
+                              }}
+                            >
+                              Edit Event
+                            </DropdownMenuItem>
+                            {event.status === "upcoming" && (
+                              <DropdownMenuItem onClick={() => startEvent(event.id, event.title)}>
+                                Start Event
+                              </DropdownMenuItem>
+                            )}
+                            {event.status === "live" && (
+                              <DropdownMenuItem onClick={() => endEvent(event.id, event.title)}>
+                                End Event
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => deleteEvent(event.id, event.title)}
+                              className="text-red-600"
+                            >
+                              Delete Event
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </div>
