@@ -1,17 +1,23 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
-import { collection, query, where, getDocs, limit } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import type { Event } from "@/types"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import type { Event } from "@/types";
 import {
   Search,
   Calendar,
@@ -31,96 +37,102 @@ import {
   TrendingUp,
   ChevronDown,
   Share2,
-} from "lucide-react"
-import { format } from "date-fns"
-import { AuthPage } from "../auth/AuthPage"
-import { useRouter } from "next/navigation"
-import { toast } from "@/components/ui/use-toast"
+} from "lucide-react";
+import { format } from "date-fns";
+import { AuthPage } from "../auth/AuthPage";
+import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/use-toast";
 
 interface HomePageProps {
-  onAuthSuccess: () => void
+  onAuthSuccess: () => void;
 }
 
 export function HomePage({ onAuthSuccess }: HomePageProps) {
-  const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [dateFilter, setDateFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState("all")
-  const [locationFilter, setLocationFilter] = useState("all")
-  const [showAuth, setShowAuth] = useState(false)
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [showAuth, setShowAuth] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const router = useRouter()
+  const router = useRouter();
 
   useEffect(() => {
-    fetchPublicEvents()
-  }, [])
+    fetchPublicEvents();
+  }, []);
 
   const fetchPublicEvents = async () => {
     try {
-      const q = query(collection(db, "events"), where("status", "==", "upcoming"), limit(12))
-      const querySnapshot = await getDocs(q)
+      const q = query(
+        collection(db, "events"),
+        where("status", "==", "upcoming"),
+        limit(12)
+      );
+      const querySnapshot = await getDocs(q);
       const eventsData = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         date: doc.data().date.toDate(),
         createdAt: doc.data().createdAt.toDate(),
-      })) as Event[]
+      })) as Event[];
 
-      eventsData.sort((a, b) => a.date.getTime() - b.date.getTime())
-      setEvents(eventsData)
+      eventsData.sort((a, b) => a.date.getTime() - b.date.getTime());
+      setEvents(eventsData);
     } catch (error) {
-      console.error("Error fetching events:", error)
+      console.error("Error fetching events:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch =
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = typeFilter === "all" || event.type === typeFilter
+      event.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter === "all" || event.type === typeFilter;
     const matchesLocation =
       locationFilter === "all" ||
       (locationFilter === "virtual" && event.isVirtual) ||
-      (locationFilter === "physical" && !event.isVirtual)
+      (locationFilter === "physical" && !event.isVirtual);
 
-    return matchesSearch && matchesType && matchesLocation
-  })
+    return matchesSearch && matchesType && matchesLocation;
+  });
 
-  const featuredEvents = filteredEvents.slice(0, 3)
-  const regularEvents = filteredEvents.slice(3)
+  const featuredEvents = filteredEvents.slice(0, 3);
+  const regularEvents = filteredEvents.slice(3);
 
   const shareEvent = async (event: Event, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent card click
+    e.stopPropagation(); // Prevent card click
     const shareData = {
       title: event.title,
       text: `Check out this amazing event: ${event.title}`,
       url: `${window.location.origin}/events/${event.id}`,
-    }
+    };
 
     if (navigator.share) {
       try {
-        await navigator.share(shareData)
+        await navigator.share(shareData);
       } catch (error) {
-        copyEventLink(event.id)
+        copyEventLink(event.id);
       }
     } else {
-      copyEventLink(event.id)
+      copyEventLink(event.id);
     }
-  }
+  };
 
   const copyEventLink = (eventId: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/events/${eventId}`).then(() => {
-      toast({
-        title: "Link Copied!",
-        description: "Event link copied to clipboard",
-      })
-    })
-  }
+    navigator.clipboard
+      .writeText(`${window.location.origin}/events/${eventId}`)
+      .then(() => {
+        toast({
+          title: "Link Copied!",
+          description: "Event link copied to clipboard",
+        });
+      });
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -140,17 +152,25 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent">
                   EventHub
                 </h1>
-                <p className="text-sm text-gray-500 hidden md:block">Where memories begin</p>
+                <p className="text-sm text-gray-500 hidden md:block">
+                  Where memories begin
+                </p>
               </div>
             </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-6">
               <nav className="flex items-center space-x-6">
-                <a href="#events" className="text-gray-600 hover:text-gray-900 transition-colors font-medium">
+                <a
+                  href="#events"
+                  className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
+                >
                   Events
                 </a>
-                <a href="#features" className="text-gray-600 hover:text-gray-900 transition-colors font-medium">
+                <a
+                  href="#features"
+                  className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
+                >
                   Features
                 </a>
                 <button
@@ -163,7 +183,10 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
               <div className="flex items-center space-x-3">
                 <Dialog open={showAuth} onOpenChange={setShowAuth}>
                   <DialogTrigger asChild>
-                    <Button variant="ghost" className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 font-medium">
+                    <Button
+                      variant="ghost"
+                      className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 font-medium"
+                    >
                       Sign In
                     </Button>
                   </DialogTrigger>
@@ -176,8 +199,8 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                   <DialogContent className="max-w-md">
                     <AuthPage
                       onSuccess={() => {
-                        setShowAuth(false)
-                        onAuthSuccess()
+                        setShowAuth(false);
+                        onAuthSuccess();
                       }}
                     />
                   </DialogContent>
@@ -187,8 +210,17 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
 
             {/* Mobile Menu Button */}
             <div className="md:hidden">
-              <Button variant="ghost" size="sm" onClick={() => setShowMobileMenu(!showMobileMenu)} className="p-2">
-                {showMobileMenu ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-2"
+              >
+                {showMobileMenu ? (
+                  <X className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
               </Button>
             </div>
           </div>
@@ -197,20 +229,32 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
           {showMobileMenu && (
             <div className="md:hidden border-t border-gray-100 py-4 space-y-4">
               <nav className="space-y-3">
-                <a href="#events" className="block text-gray-600 hover:text-gray-900 font-medium">
+                <a
+                  href="#events"
+                  className="block text-gray-600 hover:text-gray-900 font-medium"
+                >
                   Events
                 </a>
-                <a href="#features" className="block text-gray-600 hover:text-gray-900 font-medium">
+                <a
+                  href="#features"
+                  className="block text-gray-600 hover:text-gray-900 font-medium"
+                >
                   Features
                 </a>
-                <a href="#about" className="block text-gray-600 hover:text-gray-900 font-medium">
+                <a
+                  href="#about"
+                  className="block text-gray-600 hover:text-gray-900 font-medium"
+                >
                   About
                 </a>
               </nav>
               <div className="space-y-3 pt-3 border-t border-gray-100">
                 <Dialog open={showAuth} onOpenChange={setShowAuth}>
                   <DialogTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-start text-gray-700">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-gray-700"
+                    >
                       Sign In
                     </Button>
                   </DialogTrigger>
@@ -222,9 +266,9 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                   <DialogContent className="max-w-md">
                     <AuthPage
                       onSuccess={() => {
-                        setShowAuth(false)
-                        setShowMobileMenu(false)
-                        onAuthSuccess()
+                        setShowAuth(false);
+                        setShowMobileMenu(false);
+                        onAuthSuccess();
                       }}
                     />
                   </DialogContent>
@@ -258,8 +302,8 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
           </h1>
 
           <p className="text-xl sm:text-2xl text-gray-600 mb-10 max-w-4xl mx-auto leading-relaxed">
-            From intimate gatherings to grand celebrations, EventHub makes it effortless to create, manage, and
-            experience amazing events.
+            From intimate gatherings to grand celebrations, EventHub makes it
+            effortless to create, manage, and experience amazing events.
           </p>
 
           {/* CTA Buttons */}
@@ -285,19 +329,27 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
             <div className="text-center">
-              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">50K+</div>
+              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+                50K+
+              </div>
               <div className="text-gray-600 font-medium">Events Created</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">2M+</div>
+              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+                2M+
+              </div>
               <div className="text-gray-600 font-medium">Attendees</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">150+</div>
+              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+                150+
+              </div>
               <div className="text-gray-600 font-medium">Countries</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">99%</div>
+              <div className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
+                99%
+              </div>
               <div className="text-gray-600 font-medium">Satisfaction</div>
             </div>
           </div>
@@ -305,7 +357,10 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <section
+        id="features"
+        className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 bg-gray-50"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
@@ -316,7 +371,8 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
               </span>
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Powerful tools designed to make event management effortless and engaging
+              Powerful tools designed to make event management effortless and
+              engaging
             </p>
           </div>
 
@@ -326,10 +382,12 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                 <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                   <Calendar className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Smart Event Creation</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">
+                  Smart Event Creation
+                </h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Create stunning events in minutes with our intuitive builder. Add images, set pricing, and customize
-                  everything.
+                  Create stunning events in minutes with our intuitive builder.
+                  Add images, set pricing, and customize everything.
                 </p>
               </CardContent>
             </Card>
@@ -339,9 +397,12 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                 <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                   <Globe className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Virtual & Hybrid Events</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">
+                  Virtual & Hybrid Events
+                </h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Host virtual events with live streaming, interactive chat, and seamless attendee management.
+                  Host virtual events with live streaming, interactive chat, and
+                  seamless attendee management.
                 </p>
               </CardContent>
             </Card>
@@ -351,9 +412,12 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                 <div className="w-16 h-16 bg-gradient-to-r from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                   <TrendingUp className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Real-time Analytics</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">
+                  Real-time Analytics
+                </h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Track registrations, revenue, and engagement with comprehensive analytics and insights.
+                  Track registrations, revenue, and engagement with
+                  comprehensive analytics and insights.
                 </p>
               </CardContent>
             </Card>
@@ -365,15 +429,21 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
       <section id="events" className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Discover Amazing Events</h2>
-            <p className="text-xl text-gray-600">Find your next unforgettable experience</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Discover Amazing Events
+            </h2>
+            <p className="text-xl text-gray-600">
+              Find your next unforgettable experience
+            </p>
           </div>
 
           {/* Modern Search Bar */}
           <div className="bg-white rounded-3xl shadow-xl p-6 sm:p-8 max-w-5xl mx-auto mb-16">
             {/* Mobile Filter Toggle */}
             <div className="flex items-center justify-between mb-6 lg:hidden">
-              <h3 className="font-semibold text-gray-900 text-lg">Find Events</h3>
+              <h3 className="font-semibold text-gray-900 text-lg">
+                Find Events
+              </h3>
               <Button
                 variant="outline"
                 size="sm"
@@ -382,7 +452,11 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
               >
                 <Filter className="w-4 h-4" />
                 <span>Filters</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${
+                    showFilters ? "rotate-180" : ""
+                  }`}
+                />
               </Button>
             </div>
 
@@ -399,7 +473,11 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
 
             {/* Filters - Desktop Always Visible, Mobile Collapsible */}
             <div
-              className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${showFilters || window.innerWidth >= 1024 ? "block" : "hidden lg:grid"}`}
+              className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${
+                showFilters || window.innerWidth >= 1024
+                  ? "block"
+                  : "hidden lg:grid"
+              }`}
             >
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="h-12 border-gray-200 rounded-xl">
@@ -455,7 +533,9 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                   <Star className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500 mr-3" />
                   Featured Events
                 </h3>
-                <p className="text-gray-600 hidden sm:block">Handpicked amazing experiences you won't want to miss</p>
+                <p className="text-gray-600 hidden sm:block">
+                  Handpicked amazing experiences you won't want to miss
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -484,7 +564,10 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                       </Badge>
                     </div>
                     <div className="absolute top-4 right-4">
-                      <Badge variant="outline" className="bg-white/95 backdrop-blur-sm text-sm font-medium">
+                      <Badge
+                        variant="outline"
+                        className="bg-white/95 backdrop-blur-sm text-sm font-medium"
+                      >
                         {event.type}
                       </Badge>
                     </div>
@@ -501,11 +584,15 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                     <div className="space-y-3 mb-6">
                       <div className="flex items-center text-sm sm:text-base text-gray-500">
                         <Calendar className="w-4 h-4 mr-3 flex-shrink-0 text-blue-500" />
-                        <span className="truncate font-medium">{format(event.date, "MMM dd, yyyy")}</span>
+                        <span className="truncate font-medium">
+                          {format(event.date, "MMM dd, yyyy")}
+                        </span>
                       </div>
                       <div className="flex items-center text-sm sm:text-base text-gray-500">
                         <Clock className="w-4 h-4 mr-3 flex-shrink-0 text-purple-500" />
-                        <span className="truncate font-medium">{event.time}</span>
+                        <span className="truncate font-medium">
+                          {event.time}
+                        </span>
                       </div>
                       <div className="flex items-center text-sm sm:text-base text-gray-500">
                         <MapPin className="w-4 h-4 mr-3 flex-shrink-0 text-pink-500" />
@@ -518,10 +605,14 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                     <div className="flex items-center justify-between">
                       <Badge
                         className={`text-sm font-semibold px-3 py-1 ${
-                          event.ticketPrice === 0 ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+                          event.ticketPrice === 0
+                            ? "bg-green-100 text-green-800"
+                            : "bg-blue-100 text-blue-800"
                         }`}
                       >
-                        {event.ticketPrice === 0 ? "Free Event" : `$${event.ticketPrice}`}
+                        {event.ticketPrice === 0
+                          ? "Free Event"
+                          : `$${event.ticketPrice}`}
                       </Badge>
                       <div className="flex items-center space-x-2">
                         <Button
@@ -534,8 +625,8 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                         </Button>
                         <Button
                           onClick={(e) => {
-                            e.stopPropagation()
-                            setShowAuth(true)
+                            e.stopPropagation();
+                            setShowAuth(true);
                           }}
                           className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
                           size="sm"
@@ -558,8 +649,12 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 sm:mb-12 space-y-4 sm:space-y-0">
             <div>
-              <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">All Events</h3>
-              <p className="text-gray-600 hidden sm:block">Explore all upcoming experiences</p>
+              <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+                All Events
+              </h3>
+              <p className="text-gray-600 hidden sm:block">
+                Explore all upcoming experiences
+              </p>
             </div>
             <div className="flex items-center text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
               <Users className="w-4 h-4 mr-2" />
@@ -604,7 +699,10 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                       </div>
                     )}
                     <div className="absolute top-4 right-4">
-                      <Badge variant="outline" className="bg-white/95 backdrop-blur-sm text-sm font-medium">
+                      <Badge
+                        variant="outline"
+                        className="bg-white/95 backdrop-blur-sm text-sm font-medium"
+                      >
                         {event.type}
                       </Badge>
                     </div>
@@ -620,11 +718,15 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                     <div className="space-y-3 mb-6">
                       <div className="flex items-center text-sm sm:text-base text-gray-500">
                         <Calendar className="w-4 h-4 mr-3 flex-shrink-0 text-blue-500" />
-                        <span className="truncate font-medium">{format(event.date, "MMM dd, yyyy")}</span>
+                        <span className="truncate font-medium">
+                          {format(event.date, "MMM dd, yyyy")}
+                        </span>
                       </div>
                       <div className="flex items-center text-sm sm:text-base text-gray-500">
                         <Clock className="w-4 h-4 mr-3 flex-shrink-0 text-purple-500" />
-                        <span className="truncate font-medium">{event.time}</span>
+                        <span className="truncate font-medium">
+                          {event.time}
+                        </span>
                       </div>
                       <div className="flex items-center text-sm sm:text-base text-gray-500">
                         <MapPin className="w-4 h-4 mr-3 flex-shrink-0 text-pink-500" />
@@ -637,10 +739,14 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                     <div className="flex items-center justify-between">
                       <Badge
                         className={`text-sm font-semibold px-3 py-1 ${
-                          event.ticketPrice === 0 ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+                          event.ticketPrice === 0
+                            ? "bg-green-100 text-green-800"
+                            : "bg-blue-100 text-blue-800"
                         }`}
                       >
-                        {event.ticketPrice === 0 ? "Free Event" : `$${event.ticketPrice}`}
+                        {event.ticketPrice === 0
+                          ? "Free Event"
+                          : `$${event.ticketPrice}`}
                       </Badge>
                       <div className="flex items-center space-x-2">
                         <Button
@@ -654,8 +760,8 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                         <Button
                           variant="outline"
                           onClick={(e) => {
-                            e.stopPropagation()
-                            setShowAuth(true)
+                            e.stopPropagation();
+                            setShowAuth(true);
                           }}
                           className="hover:bg-blue-50 hover:border-blue-300 text-sm font-semibold border-2 transition-all duration-300"
                           size="sm"
@@ -674,8 +780,12 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
               <div className="w-24 h-24 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Calendar className="w-12 h-12 text-gray-400" />
               </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">No events found</h3>
-              <p className="text-gray-600 text-lg mb-8">Try adjusting your search criteria or check back later</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">
+                No events found
+              </h3>
+              <p className="text-gray-600 text-lg mb-8">
+                Try adjusting your search criteria or check back later
+              </p>
               <Button
                 onClick={() => setShowAuth(true)}
                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
@@ -701,7 +811,8 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
               <h3 className="text-2xl sm:text-3xl font-bold">EventHub</h3>
             </div>
             <p className="text-gray-300 mb-8 text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed">
-              Connecting people through amazing experiences. Start your journey today.
+              Connecting people through amazing experiences. Start your journey
+              today.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
               <Button
@@ -713,10 +824,12 @@ export function HomePage({ onAuthSuccess }: HomePageProps) {
                 Join EventHub Today
               </Button>
             </div>
-            <div className="text-gray-400 text-sm">© 2024 EventHub. Made with ❤️ for event creators worldwide.</div>
+            <div className="text-gray-400 text-sm">
+              © 2024 EventHub. Made with ❤️ for event creators worldwide.
+            </div>
           </div>
         </div>
       </footer>
     </div>
-  )
+  );
 }
